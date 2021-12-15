@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Checkout
-      - uses: actions/checkout@v2
+        uses: actions/checkout@v2
 
-      - name: Set Up JDK 11
+      - name: Set Up JDK
         uses: actions/setup-java@v2
         with:
-          java-versions: '11'
+          java-version: '11'
           distribution: 'adopt'
           cache: 'maven'
           check-latest: true
