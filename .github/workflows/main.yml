@@ -29,5 +29,6 @@ jobs:
         with:
           files: ./target/CPTAUtilityLibrary-1.0-SNAPSHOT.jar
           name: ${{ github.sha }}
+          tag_name: ${{ github.sha }}
 
 
