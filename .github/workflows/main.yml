@@ -24,11 +24,15 @@ jobs:
       - name: Build With Maven
         run: mvn -B package --file pom.xml
 
+      - name: Generate Release Tag
+        id: tag
+        run: |
+          echo "::set-output name=release_tag::v$(date +"%Y.%m.%d_%H-%M")"
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: ./target/CPTAUtilityLibrary-1.0-SNAPSHOT.jar
-          name: ${{ github.sha }}
-          tag_name: ${{ github.sha }}
+          tag_name: ${{ steps.tag.outputs.release_tag }}
 
 
