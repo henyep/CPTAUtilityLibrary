@@ -1,13 +1,22 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.query_mutation;
 
 import java.io.BufferedReader;
@@ -25,8 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import com.cloudpta.utilites.exceptions.CPTAException;
 import com.cloudpta.utilites.logging.CPTALogger;
-import com.cloudpta.graphql.common.QPGraphQLAPIConstants;
-import com.cloudpta.graphql.common.QPQueryVariablesParser;
+import com.cloudpta.graphql.common.CPTAGraphQLAPIConstants;
+import com.cloudpta.graphql.common.CPTAGraphQLHandler;
+import com.cloudpta.graphql.common.CPTAGraphQLQueryType;
+import com.cloudpta.graphql.common.CPTAQueryVariablesParser;
 import ch.qos.logback.classic.Logger;
 import graphql.ExecutionInput;
 import graphql.ExecutionResult;
@@ -49,11 +60,49 @@ import jakarta.json.bind.config.PropertyNamingStrategy;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet  
+public abstract class CPTAGraphQLQueryMutationEndpoint extends HttpServlet  
 {
+    protected void addCustomTypeDefinitionsToRegistry(GraphQLContext context, TypeDefinitionRegistry mergedTypeDefinitionRegistry)
+    {
+        // Default is that there are no custom type definitions so do nothing
+    }
+
+    // default is no mutations or subscriptions
+    protected InputStream getMutationSchemaStream(GraphQLContext context) throws CPTAException
+    {
+        return null;
+    }
+    protected InputStream getSubscriptionsSchemaStream(GraphQLContext context) throws CPTAException
+    {
+        return null;
+    }
+
+    // This should return any existing graph ql build or null if there is not one
+    protected abstract GraphQL getExistingGraphQL(GraphQLContext context) throws CPTAException;
+    protected abstract TypeDefinitionRegistry getExistingTypeDefinitionRegistry(GraphQLContext context) throws CPTAException;
+    protected abstract GraphQL getExistingMutationBuild(GraphQLContext context, TypeDefinitionRegistry typeRegistry) throws CPTAException;
+    protected abstract GraphQL getExistingQueryBuild(GraphQLContext context, TypeDefinitionRegistry typeRegistry) throws CPTAException;
+    // Store the existing builds after made
+    protected abstract void setExistingTypeDefinitionRegistry(GraphQLContext context, TypeDefinitionRegistry typeRegistry) throws CPTAException;
+    protected abstract void setExistingMutationBuild(GraphQLContext context, GraphQL mutationBuild) throws CPTAException;
+    protected abstract void setExistingQueryBuild(GraphQLContext context, GraphQL queryBuild) throws CPTAException;
+
+    // These are the inputs to the various schemas
+    protected abstract InputStream getTypesSchemaStream(GraphQLContext context) throws CPTAException;
+    protected abstract InputStream getQueriesSchemaStream(GraphQLContext context) throws CPTAException;
+
+    @Path("/")
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
     public Response handleGraphQLQuery
                                      (
                                      @Context HttpServletRequest httpRequest,
@@ -63,20 +112,23 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         Response response = null;
         try
         {
+            // Log query
+            servletLogger.info("received query: " + queryAsString);
+
             // Parse the query
             JsonReader reader = Json.createReader(new StringReader(queryAsString));
             JsonObject queryObject = reader.readObject();             
             // Get operation name
             String operationName = null;
-            if(false == queryObject.isNull(QPGraphQLAPIConstants.OPERATION_NAME))
+            if(null != queryObject.get(CPTAGraphQLAPIConstants.OPERATION_NAME))
             {
-                operationName = queryObject.getString(QPGraphQLAPIConstants.OPERATION_NAME);
+                operationName = queryObject.getString(CPTAGraphQLAPIConstants.OPERATION_NAME);
             }
             // get the query field
-            String graphQLQuery = queryObject.getString(QPGraphQLAPIConstants.OPERATION_TEXT);
+            String graphQLQuery = queryObject.getString(CPTAGraphQLAPIConstants.OPERATION_TEXT);
             // Need to turn variables into a map of keys and values
-            JsonObject variablesAsJsonObject = queryObject.getJsonObject(QPGraphQLAPIConstants.OPERATION_VARIABLES);
-            Map<String, Object> variables = QPQueryVariablesParser.parseVariables(variablesAsJsonObject);
+            JsonObject variablesAsJsonObject = queryObject.getJsonObject(CPTAGraphQLAPIConstants.OPERATION_VARIABLES);
+            Map<String, Object> variables = CPTAQueryVariablesParser.parseVariables(variablesAsJsonObject);
 
 
             // Build the context for the query
@@ -105,6 +157,8 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
                                         .withFormatting(false);
             Jsonb converter = JsonbBuilder.create(jsonbConfig);
             String resultAsString = converter.toJson(spec);
+            // Log query
+            servletLogger.info("sent response : " + resultAsString + " to request: " + queryAsString);
             
             // Send it back
             response = Response.ok().entity(resultAsString).build();
@@ -129,7 +183,7 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
 
         // Add remote host
         String remoteHost = httpRequest.getRemoteHost();
-        socketRequestDetails.put(QPGraphQLAPIConstants.CONTEXT_REMOTE_HOST, remoteHost);
+        socketRequestDetails.put(CPTAGraphQLAPIConstants.CONTEXT_REMOTE_HOST, remoteHost);
 
         // Add all the headers
         Iterator<String> headerNames = httpRequest.getHeaderNames().asIterator();
@@ -137,18 +191,21 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         {
             String currentHeaderName = headerNames.next();
             String currentHeaderValue = httpRequest.getHeader(currentHeaderName);
-            socketRequestDetails.put(currentHeaderName, currentHeaderValue);
+            socketRequestDetails.put(currentHeaderName.toLowerCase(), currentHeaderValue);
         }
 
         // Add all the cookies
         Cookie[] cookies = httpRequest.getCookies();
-        int numberOfCookies = Array.getLength(cookies);
-        for(int i = 0; i < numberOfCookies; i++)
+        if(null != cookies)
         {
-            String currentCookieName = cookies[i].getName();
-            String currentCookieValue = cookies[i].getValue();
-            socketRequestDetails.put(currentCookieName, currentCookieValue);
-        }
+            int numberOfCookies = Array.getLength(cookies);
+            for(int i = 0; i < numberOfCookies; i++)
+            {
+                String currentCookieName = cookies[i].getName();
+                String currentCookieValue = cookies[i].getValue();
+                socketRequestDetails.put(currentCookieName, currentCookieValue);
+            }
+        }   
 
         return socketRequestDetails;
     }
@@ -158,10 +215,10 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         // Default just saves the operation name, operation as string, request and variables
         if(null != operationName)
         {
-            contextToInitialise.put(QPGraphQLAPIConstants.CONTEXT_OPERATION_NAME, operationName);
+            contextToInitialise.put(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_NAME, operationName);
         }
-        contextToInitialise.put(QPGraphQLAPIConstants.CONTEXT_OPERATION_REQUEST, operationAsString);
-        contextToInitialise.put(QPGraphQLAPIConstants.CONTEXT_OPERATION_VARIABLES, variablesAsJsonObject);
+        contextToInitialise.put(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_REQUEST, operationAsString);
+        contextToInitialise.put(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_VARIABLES, variablesAsJsonObject);
 
         // Add all the socket request details
         Set<String> socketRequestPropertyNames = socketRequestDetails.keySet();
@@ -174,7 +231,7 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         // But this is where you set up the context for the query like any DB or topics 
     }
 
-    protected GraphQL getGraphQL(GraphQLContext context) throws CPTAException
+    protected synchronized GraphQL getGraphQL(GraphQLContext context) throws CPTAException
     {
         // Check if we havent already set up graphQL
         GraphQL operationBuild = getExistingGraphQL(context);
@@ -186,20 +243,23 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
             
             // set up the graphql instance for the this
             // Get operation type
-            String typeOfOperation = ((String)context.get(QPGraphQLAPIConstants.CONTEXT_OPERATION_REQUEST)).trim();
+            String typeOfOperation = ((String)context.get(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_REQUEST)).trim();
             // If it is a mutation
-            if(true == typeOfOperation.startsWith(QPGraphQLAPIConstants.OPERATION_MUTATION_TYPE))
+            if(true == typeOfOperation.startsWith(CPTAGraphQLAPIConstants.OPERATION_MUTATION_TYPE))
             {
                 // set up mutation build if needed
                 operationBuild = getMutationBuild(mergedTypeRegistry, context);
+                // Save it
+                setExistingMutationBuild(context, operationBuild);            
             }
             // otherwise is a query 
             else
             {
                 // set up a query if needed
                 operationBuild = getQueryBuild(mergedTypeRegistry, context);
+                // Save it
+                setExistingQueryBuild(context, operationBuild);
             }
-
         }
 
         return operationBuild;
@@ -216,39 +276,71 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
                 // get path to schemas
                 InputStream typesSchemaStream = getTypesSchemaStream(context);
                 InputStream mutationsSchemaStream = getMutationSchemaStream(context);
-                InputStream subscriptionsSchemaStream = getSubscriptionSchemaStream(context);
                 InputStream queriesSchemaStream = getQueriesSchemaStream(context);
+                InputStream subscriptionsSchemaStream = getSubscriptionsSchemaStream(context);
 
-                // Start with the types schema
-                BufferedReader schemaStream = new BufferedReader(new InputStreamReader(typesSchemaStream, StandardCharsets.UTF_8));
-                String apiTypesSchema = schemaStream.lines().collect(Collectors.joining("\n"));
-                // Then with queries schema
-                schemaStream = new BufferedReader(new InputStreamReader(queriesSchemaStream, StandardCharsets.UTF_8));
-                String queriesSchema = schemaStream.lines().collect(Collectors.joining("\n"));
-                // Then with mutations schema
-                schemaStream = new BufferedReader(new InputStreamReader(mutationsSchemaStream, StandardCharsets.UTF_8));
-                String mutationsSchema = schemaStream.lines().collect(Collectors.joining("\n"));
-                // Then with subscriptions schema
-                schemaStream = new BufferedReader(new InputStreamReader(subscriptionsSchemaStream, StandardCharsets.UTF_8));
-                String subscriptionsSchema = schemaStream.lines().collect(Collectors.joining("\n"));
-                // Finally schema to bring it all together
-                String holderSchema = QPGraphQLAPIConstants.MUTATION_QUERY_HOLDER_SCHEMA;
+                // This is the type definition registry that merges all the others
+                mergedTypeDefinitionRegistry = new TypeDefinitionRegistry();
 
                 // Parse these schemas
                 SchemaParser schemaParser = new SchemaParser();
-                TypeDefinitionRegistry apiTypeDefinitionRegistry = schemaParser.parse(apiTypesSchema);
-                TypeDefinitionRegistry mutationTypeDefinitionRegistry = schemaParser.parse(mutationsSchema);
-                TypeDefinitionRegistry queryTypeDefinitionRegistry = schemaParser.parse(queriesSchema);
-                TypeDefinitionRegistry subscriptionTypeDefinitionRegistry = schemaParser.parse(subscriptionsSchema);
-                TypeDefinitionRegistry schemaTypeDefinitionRegistry = schemaParser.parse(holderSchema);
 
-                // Merge them
-                mergedTypeDefinitionRegistry = new TypeDefinitionRegistry();
+                // We are going to need a holder schema to say what types of queries are there
+                String holderSchema = "schema {\n" + "query:Query \n";
+                // Start with the types schema
+                BufferedReader schemaStream = new BufferedReader(new InputStreamReader(typesSchemaStream, StandardCharsets.UTF_8));
+                String apiTypesSchema = schemaStream.lines().collect(Collectors.joining("\n"));
+                // Parse type schema
+                TypeDefinitionRegistry apiTypeDefinitionRegistry = schemaParser.parse(apiTypesSchema);
+                // add to merged type registry
                 mergedTypeDefinitionRegistry.merge(apiTypeDefinitionRegistry);
-                mergedTypeDefinitionRegistry.merge(mutationTypeDefinitionRegistry);
+                // Then with queries schema
+                schemaStream = new BufferedReader(new InputStreamReader(queriesSchemaStream, StandardCharsets.UTF_8));
+                String queriesSchema = " type Query { " + schemaStream.lines().collect(Collectors.joining("\n")) + " } ";
+                // Parse query schema
+                TypeDefinitionRegistry queryTypeDefinitionRegistry = schemaParser.parse(queriesSchema);
+                // add to merged type registry
                 mergedTypeDefinitionRegistry.merge(queryTypeDefinitionRegistry);
-                mergedTypeDefinitionRegistry.merge(subscriptionTypeDefinitionRegistry);
+
+                // Then with mutations schema
+                String mutationsSchema = "";
+                // If there are mutations add to list of types of queries
+                if(null != mutationsSchemaStream)
+                {
+                    holderSchema = holderSchema + "mutation:Mutation \n";
+                    schemaStream = new BufferedReader(new InputStreamReader(mutationsSchemaStream, StandardCharsets.UTF_8));
+                    mutationsSchema = " type Mutation { " + schemaStream.lines().collect(Collectors.joining("\n")) + " } ";
+                    // Parse mutation schema
+                    TypeDefinitionRegistry mutationTypeDefinitionRegistry = schemaParser.parse(mutationsSchema);
+                    // add to merged type registry
+                    mergedTypeDefinitionRegistry.merge(mutationTypeDefinitionRegistry);
+                }
+                // Then with subscriptions schema
+                String subscriptionsSchema = "";
+                // If there are subscriptions add to list of types of queries
+                if(null != subscriptionsSchemaStream)
+                {
+                    holderSchema = holderSchema + "subscription:Subscription \n";
+                    schemaStream = new BufferedReader(new InputStreamReader(subscriptionsSchemaStream, StandardCharsets.UTF_8));
+                    subscriptionsSchema = " type Subscription { " + schemaStream.lines().collect(Collectors.joining("\n")) + " } ";
+                    // Parse subscription schema
+                    TypeDefinitionRegistry subscriptionTypeDefinitionRegistry = schemaParser.parse(subscriptionsSchema);    
+                    // add to merged type registry
+                    mergedTypeDefinitionRegistry.merge(subscriptionTypeDefinitionRegistry);              
+                }
+                // Finally schema to bring it all together
+                holderSchema = holderSchema + "}";
+                // parse placeholder schema
+                TypeDefinitionRegistry schemaTypeDefinitionRegistry = schemaParser.parse(holderSchema);
+                // add to merged type registry
                 mergedTypeDefinitionRegistry.merge(schemaTypeDefinitionRegistry);              
+
+
+                // Add custom type definitions
+                addCustomTypeDefinitionsToRegistry(context, mergedTypeDefinitionRegistry);
+
+                // Save the type registry
+                setExistingTypeDefinitionRegistry(context, mergedTypeDefinitionRegistry); 
         }
 
         return mergedTypeDefinitionRegistry;
@@ -257,7 +349,7 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
     protected GraphQL getMutationBuild(TypeDefinitionRegistry typeRegistry, GraphQLContext context) throws CPTAException
     {
         // Get the mutation build
-        GraphQL mutationBuild = getExistingMutationBuild(typeRegistry,context);
+        GraphQL mutationBuild = getExistingMutationBuild(context, typeRegistry);
         // If we havent already set up graphQL
         if(null == mutationBuild)
         {
@@ -270,7 +362,7 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
                 RuntimeWiring.newRuntimeWiring()
                 .type
                 (
-                    TypeRuntimeWiring.newTypeWiring(QPGraphQLAPIConstants.WIRING_MUTATION_TYPE)
+                    TypeRuntimeWiring.newTypeWiring(CPTAGraphQLAPIConstants.WIRING_MUTATION_TYPE)
                     .dataFetchers(fetcherForThisBuild)
                 );
                 // Add type resolvers
@@ -296,7 +388,7 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
     protected GraphQL getQueryBuild(TypeDefinitionRegistry typeRegistry, GraphQLContext context) throws CPTAException
     {
         // Get the query build
-        GraphQL queryBuild = getExistingQueryBuild(typeRegistry,context);
+        GraphQL queryBuild = getExistingQueryBuild(context, typeRegistry);
         // If we havent already set up graphQL
         if(null == queryBuild)
         {
@@ -309,7 +401,7 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
                 RuntimeWiring.newRuntimeWiring()
                 .type
                 (
-                    TypeRuntimeWiring.newTypeWiring(QPGraphQLAPIConstants.WIRING_QUERY_TYPE)
+                    TypeRuntimeWiring.newTypeWiring(CPTAGraphQLAPIConstants.WIRING_QUERY_TYPE)
                     .dataFetchers(fetcherForThisBuild)
                 );
                 // Add type resolvers
@@ -332,17 +424,17 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         return queryBuild;
     }
 
-    protected abstract List<QPQueryMutationHandler> getHandlers();
+    protected abstract List<CPTAGraphQLHandler> getHandlers(GraphQLContext context);
     
     // Get type resolvers and data fetchers
     protected void addTypeResolversForMutation(graphql.schema.idl.RuntimeWiring.Builder mutationRuntimeWiringBuilder, GraphQLContext context) throws CPTAException
     {
         // go through the handlers
-        List<QPQueryMutationHandler> handlers = getHandlers();
+        List<CPTAGraphQLHandler> handlers = getHandlers(context);
 
-        for(QPQueryMutationHandler currentHandler:handlers)
+        for(CPTAGraphQLHandler currentHandler:handlers)
         {
-            currentHandler.addTypeResolversForMutations(mutationRuntimeWiringBuilder, context);
+            currentHandler.addTypeResolversForQueryType(CPTAGraphQLQueryType.MUTATION, mutationRuntimeWiringBuilder, context);
         }
     }
 
@@ -351,11 +443,11 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         Map<String, DataFetcher> allDataFetchersForMutation = new ConcurrentHashMap<>();
 
         // go through the handlers
-        List<QPQueryMutationHandler> handlers = getHandlers();
+        List<CPTAGraphQLHandler> handlers = getHandlers(context);
 
-        for(QPQueryMutationHandler currentHandler:handlers)
+        for(CPTAGraphQLHandler currentHandler:handlers)
         {
-            Map<String, DataFetcher> dataFetchersForThisHandler = currentHandler.getMutationsDataFetchers(context);
+            Map<String, DataFetcher> dataFetchersForThisHandler = currentHandler.getDataFetchersForQueryType(CPTAGraphQLQueryType.MUTATION, context);
             allDataFetchersForMutation.putAll(dataFetchersForThisHandler);
         }
 
@@ -365,11 +457,11 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
     protected void addTypeResolversForQuery(graphql.schema.idl.RuntimeWiring.Builder queryRuntimeWiringBuilder, GraphQLContext context) throws CPTAException
     {
         // go through the handlers
-        List<QPQueryMutationHandler> handlers = getHandlers();
+        List<CPTAGraphQLHandler> handlers = getHandlers(context);
 
-        for(QPQueryMutationHandler currentHandler:handlers)
+        for(CPTAGraphQLHandler currentHandler:handlers)
         {
-            currentHandler.addTypeResolversForQueries(queryRuntimeWiringBuilder, context);
+            currentHandler.addTypeResolversForQueryType(CPTAGraphQLQueryType.QUERY, queryRuntimeWiringBuilder, context);
         }
     }
 
@@ -378,29 +470,17 @@ public abstract class QPGraphQLQueryMutationEndpoint extends HttpServlet
         Map<String, DataFetcher> allDataFetchersForQuery = new ConcurrentHashMap<>();
 
         // go through the handlers
-        List<QPQueryMutationHandler> handlers = getHandlers();
+        List<CPTAGraphQLHandler> handlers = getHandlers(context);
 
-        for(QPQueryMutationHandler currentHandler:handlers)
+        for(CPTAGraphQLHandler currentHandler:handlers)
         {
-            Map<String, DataFetcher> dataFetchersForThisHandler = currentHandler.getQueriesDataFetchers(context);
+            Map<String, DataFetcher> dataFetchersForThisHandler = currentHandler.getDataFetchersForQueryType(CPTAGraphQLQueryType.QUERY, context);
             allDataFetchersForQuery.putAll(dataFetchersForThisHandler);
         }
 
         return allDataFetchersForQuery;
 
     }
-
-    // This should return any existing graph ql build or null if there is not one
-    protected abstract GraphQL getExistingGraphQL(GraphQLContext context) throws CPTAException;
-    protected abstract TypeDefinitionRegistry getExistingTypeDefinitionRegistry(GraphQLContext context) throws CPTAException;
-    protected abstract GraphQL getExistingMutationBuild(TypeDefinitionRegistry typeRegistry, GraphQLContext context) throws CPTAException;
-    protected abstract GraphQL getExistingQueryBuild(TypeDefinitionRegistry typeRegistry, GraphQLContext context) throws CPTAException;
-
-    // These are the inputs to the various schemas
-    protected abstract InputStream getTypesSchemaStream(GraphQLContext context) throws CPTAException;
-    protected abstract InputStream getMutationSchemaStream(GraphQLContext context) throws CPTAException;
-    protected abstract InputStream getSubscriptionSchemaStream(GraphQLContext context) throws CPTAException;
-    protected abstract InputStream getQueriesSchemaStream(GraphQLContext context) throws CPTAException;
 
     Logger servletLogger = CPTALogger.getLogger();   
 }

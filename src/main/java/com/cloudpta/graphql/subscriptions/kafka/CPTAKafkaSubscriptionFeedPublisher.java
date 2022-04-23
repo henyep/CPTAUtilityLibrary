@@ -1,13 +1,22 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.subscriptions.kafka;
 
 import java.io.IOException;
@@ -16,9 +25,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import com.cloudpta.graphql.subscriptions.QPSubscriptionFeedPublisher;
-import com.cloudpta.graphql.common.QPGraphQLAPIConstants;
-import com.cloudpta.graphql.common.QPGraphQLInput;
+import com.cloudpta.graphql.subscriptions.CPTASubscriptionFeedPublisher;
+import com.cloudpta.graphql.common.CPTAGraphQLAPIConstants;
+import com.cloudpta.graphql.common.CPTAGraphQLInput;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -31,21 +40,21 @@ import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
 
-public abstract class QPKafkaSubscriptionFeedPublisher<ResultType,RequestType extends QPGraphQLInput> extends QPSubscriptionFeedPublisher<ResultType,RequestType> 
+public abstract class CPTAKafkaSubscriptionFeedPublisher<ResultType,RequestType extends CPTAGraphQLInput> extends CPTASubscriptionFeedPublisher<ResultType,RequestType> 
 {
     @Override
     protected void setupSource()
     {
         // Need to get bootstap broker urls from context
-        String url = context.get(QPGraphQLAPIConstants.KAFKA_BOOTSTRAP_BROKERS_URL);
+        String url = context.get(CPTAGraphQLAPIConstants.KAFKA_BOOTSTRAP_BROKERS_URL);
         // Get the group id
-        String groupID = context.get(QPGraphQLAPIConstants.KAFKA_GROUP_ID);
+        String groupID = context.get(CPTAGraphQLAPIConstants.KAFKA_GROUP_ID);
         // Where to start from
-        String offsetReset = context.get(QPGraphQLAPIConstants.KAFKA_OFFSET_RESET);
+        String offsetReset = context.get(CPTAGraphQLAPIConstants.KAFKA_OFFSET_RESET);
         // Get the name of the topic to read from
-        String topicToBrowse = context.get(QPGraphQLAPIConstants.KAFKA_TOPIC_TO_BROWSE);
+        String topicToBrowse = context.get(CPTAGraphQLAPIConstants.KAFKA_TOPIC_TO_BROWSE);
         // Get the text of the schema to use
-        String schemaToUse = context.get(QPGraphQLAPIConstants.KAFKA_SCHEMA_TO_USE);
+        String schemaToUse = context.get(CPTAGraphQLAPIConstants.KAFKA_SCHEMA_TO_USE);
 
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", url);

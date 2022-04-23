@@ -1,13 +1,22 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.subscriptions;
 
 import java.io.IOException;
@@ -15,8 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import com.cloudpta.utilites.exceptions.CPTAException;
-import com.cloudpta.graphql.common.QPGraphQLAPIConstants;
-import com.cloudpta.graphql.common.QPGraphQLInput;
+import com.cloudpta.graphql.common.CPTAGraphQLAPIConstants;
+import com.cloudpta.graphql.common.CPTAGraphQLInput;
 import graphql.GraphQLContext;
 import io.reactivex.rxjava3.core.BackpressureStrategy;
 import io.reactivex.rxjava3.core.Flowable;
@@ -27,14 +36,14 @@ import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.observables.ConnectableObservable;
 import jakarta.json.JsonObject;
 
-public abstract class QPSubscriptionFeedPublisher<ResultType,RequestType extends QPGraphQLInput> 
+public abstract class CPTASubscriptionFeedPublisher<ResultType,RequestType extends CPTAGraphQLInput> 
 {
-    public QPSubscriptionFeedPublisher(RequestType newRequest) 
+    public CPTASubscriptionFeedPublisher(RequestType newRequest) 
     {
         // Get the context from the request
         context = newRequest.getInputContext();
         // Get the timeout
-        String timeoutAsString = context.get(QPGraphQLAPIConstants.SUBSCRIPTION_TIMEOUT);
+        String timeoutAsString = context.get(CPTAGraphQLAPIConstants.SUBSCRIPTION_TIMEOUT);
         // If there is one
         if(null != timeoutAsString)
         {
@@ -155,7 +164,7 @@ public abstract class QPSubscriptionFeedPublisher<ResultType,RequestType extends
     protected abstract List<JsonObject> readFromSource(long timeout) throws IOException;
 
     // For testing purposes
-    protected QPSubscriptionFeedPublisher()
+    protected CPTASubscriptionFeedPublisher()
     {
 
         publisher = null;
@@ -170,9 +179,9 @@ public abstract class QPSubscriptionFeedPublisher<ResultType,RequestType extends
     GetResultsThread<ResultType, RequestType> resultsThread;
 }
 
-class ObservableOnSubscribeHandler<ResultType,RequestType extends QPGraphQLInput> implements ObservableOnSubscribe<ResultType>
+class ObservableOnSubscribeHandler<ResultType,RequestType extends CPTAGraphQLInput> implements ObservableOnSubscribe<ResultType>
 {
-    public ObservableOnSubscribeHandler(QPSubscriptionFeedPublisher<ResultType,RequestType> thePublisher)
+    public ObservableOnSubscribeHandler(CPTASubscriptionFeedPublisher<ResultType,RequestType> thePublisher)
     {
         publisher = thePublisher;
     }
@@ -183,12 +192,12 @@ class ObservableOnSubscribeHandler<ResultType,RequestType extends QPGraphQLInput
         publisher.handleSubscribe(emitter);
     }
 
-    QPSubscriptionFeedPublisher<ResultType,RequestType> publisher;
+    CPTASubscriptionFeedPublisher<ResultType,RequestType> publisher;
 }
 
-class CancelSubscriptionHandler<ResultType, RequestType extends QPGraphQLInput> implements Action
+class CancelSubscriptionHandler<ResultType, RequestType extends CPTAGraphQLInput> implements Action
 {
-    public CancelSubscriptionHandler(QPSubscriptionFeedPublisher<ResultType,RequestType> newPublisher)
+    public CancelSubscriptionHandler(CPTASubscriptionFeedPublisher<ResultType,RequestType> newPublisher)
     {
         publisher = newPublisher;
     }
@@ -199,12 +208,12 @@ class CancelSubscriptionHandler<ResultType, RequestType extends QPGraphQLInput> 
         publisher.handleUnsubscribe();
     }
 
-    QPSubscriptionFeedPublisher<ResultType,RequestType> publisher;
+    CPTASubscriptionFeedPublisher<ResultType,RequestType> publisher;
 }
 
-class GetResultsThread<ResultType, RequestType extends QPGraphQLInput> extends Thread
+class GetResultsThread<ResultType, RequestType extends CPTAGraphQLInput> extends Thread
 {
-    public GetResultsThread(ObservableEmitter<ResultType> newEmitter, QPSubscriptionFeedPublisher<ResultType,RequestType> newPublisher)
+    public GetResultsThread(ObservableEmitter<ResultType> newEmitter, CPTASubscriptionFeedPublisher<ResultType,RequestType> newPublisher)
     {
         this.emitter = newEmitter;
         this.publisher = newPublisher;
@@ -216,6 +225,6 @@ class GetResultsThread<ResultType, RequestType extends QPGraphQLInput> extends T
         publisher.getNewResults(emitter);
     }
 
-    QPSubscriptionFeedPublisher<ResultType,RequestType> publisher;
+    CPTASubscriptionFeedPublisher<ResultType,RequestType> publisher;
     ObservableEmitter<ResultType> emitter;
 }

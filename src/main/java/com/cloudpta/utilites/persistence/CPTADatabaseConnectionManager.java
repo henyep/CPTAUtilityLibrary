@@ -1,7 +1,7 @@
 /*
 
 Copyright 2017-2019 Advanced Products Limited, 
-dannyb@cloudpta.com
+Copyright 2021-2022 Liquid Markets Limited, 
 github.com/dannyb2018
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,6 +87,7 @@ public class CPTADatabaseConnectionManager  implements AutoCloseable
             preparedStatements.put(statementName, statementSQL);
         }
     }
+
     public static void addConnectionManager(String name, String databaseType, Properties connectionProperties) throws SQLException
     {
         // Create a connection manager of this type
@@ -102,6 +103,15 @@ public class CPTADatabaseConnectionManager  implements AutoCloseable
         
         // Put it into the list
         CPTADatabaseConnectionManager.instances.put(name, connectionManager);
+    }
+
+    public static void addConnectionManager(String name, CPTADatabaseConnectionManager connectionManagerToAdd, Properties connectionProperties) throws SQLException
+    {        
+        // intitialise it 
+        connectionManagerToAdd.initialise(connectionProperties);
+        
+        // Put it into the list
+        CPTADatabaseConnectionManager.instances.put(name, connectionManagerToAdd);
     }
     
     protected void initialise(Properties connectionProperties) throws SQLException

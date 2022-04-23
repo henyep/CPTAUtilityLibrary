@@ -1,13 +1,22 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.subscriptions;
 
 import java.io.StringReader;
@@ -15,7 +24,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import com.cloudpta.utilites.exceptions.CPTAException;
 import com.cloudpta.utilites.logging.CPTALogger;
-import com.cloudpta.graphql.common.QPGraphQLAPIConstants;
+import com.cloudpta.graphql.common.CPTAGraphQLAPIConstants;
 import org.eclipse.jetty.websocket.api.Session;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -30,13 +39,13 @@ import jakarta.json.bind.JsonbBuilder;
 import jakarta.json.bind.JsonbConfig;
 import jakarta.json.bind.config.PropertyNamingStrategy;
 
-public class QPSubscriptionFeed implements Subscriber<ExecutionResult>  
+public class CPTASubscriptionFeed implements Subscriber<ExecutionResult>  
 {
     Session socketSession;
     AtomicReference<Subscription> subscriptionRef;
     String id;
     
-    public QPSubscriptionFeed(Session websocketSession, AtomicReference<Subscription> subscriptionRef, String subscriptionID)
+    public CPTASubscriptionFeed(Session websocketSession, AtomicReference<Subscription> subscriptionRef, String subscriptionID)
     {
         socketSession = websocketSession;
         this.subscriptionRef = subscriptionRef;
@@ -69,9 +78,9 @@ public class QPSubscriptionFeed implements Subscriber<ExecutionResult>
             JsonObject resultObject = reader.readObject(); 
 
             JsonObjectBuilder responseObjectBuilder = Json.createObjectBuilder();
-            responseObjectBuilder.add(QPGraphQLAPIConstants.PAYLOAD_TYPE, QPGraphQLAPIConstants.PAYLOAD_TYPE_DATA);
-            responseObjectBuilder.add(QPGraphQLAPIConstants.PAYLOAD_ID, id);
-            responseObjectBuilder.add(QPGraphQLAPIConstants.PAYLOAD, resultObject);
+            responseObjectBuilder.add(CPTAGraphQLAPIConstants.PAYLOAD_TYPE, CPTAGraphQLAPIConstants.PAYLOAD_TYPE_DATA);
+            responseObjectBuilder.add(CPTAGraphQLAPIConstants.PAYLOAD_ID, id);
+            responseObjectBuilder.add(CPTAGraphQLAPIConstants.PAYLOAD, resultObject);
             JsonObject responseObject = responseObjectBuilder.build();
             String responseAsString = responseObject.toString();
             socketSession.getRemote().sendString(responseAsString);
@@ -108,9 +117,9 @@ public class QPSubscriptionFeed implements Subscriber<ExecutionResult>
     {
         // Need to shut down properly, so send back a stop message
         JsonObjectBuilder responseObjectBuilder = Json.createObjectBuilder();
-        responseObjectBuilder.add(QPGraphQLAPIConstants.PAYLOAD_TYPE, QPGraphQLAPIConstants.PAYLOAD_TYPE_STOP);
-        responseObjectBuilder.add(QPGraphQLAPIConstants.PAYLOAD_ID, id);
-        responseObjectBuilder.add(QPGraphQLAPIConstants.PAYLOAD, "");
+        responseObjectBuilder.add(CPTAGraphQLAPIConstants.PAYLOAD_TYPE, CPTAGraphQLAPIConstants.PAYLOAD_TYPE_STOP);
+        responseObjectBuilder.add(CPTAGraphQLAPIConstants.PAYLOAD_ID, id);
+        responseObjectBuilder.add(CPTAGraphQLAPIConstants.PAYLOAD, "");
         JsonObject responseObject = responseObjectBuilder.build();
         String responseAsString = responseObject.toString();
 

@@ -17,30 +17,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 */
-package com.cloudpta.utilites.websocket;
+package com.cloudpta.graphql.common;
 
-/**
- *
- * @author Danny
- */
-class CPTAWebSocketHeader
+import com.cloudpta.utilites.exceptions.CPTAException;
+
+public class CPTAGraphQLNotFoundException extends CPTAException
 {
-    public CPTAWebSocketHeader(String newName, String newValue)
+    public CPTAGraphQLNotFoundException(String errorMessage) 
     {
-        name = newName;
-        value = newValue;
+        super(errorMessage);
     }
-    
-    public String getValue()
-    {
-        return value;
-    }
-    
-    public String getName()
-    {
-        return name;
-    }
-    
-    protected String name;
-    protected String value;    
 }

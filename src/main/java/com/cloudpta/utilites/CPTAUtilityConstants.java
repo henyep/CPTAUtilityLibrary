@@ -1,7 +1,7 @@
 /*
 
 Copyright 2017-2019 Advanced Products Limited, 
-dannyb@cloudpta.com
+Copyright 2021-2022 Liquid Markets Limited, 
 github.com/dannyb2018
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,11 @@ package com.cloudpta.utilites;
  */
 public interface CPTAUtilityConstants
 {
+    public static final String VERSION = "1.5.5";       
+    
+    public static final String FRONTEND_LOCATION_PROPERTY_NAME = "FRONTEND_LOCATION";
+    public static final String SERVER_PORT_PROPERTY_NAME = "SERVER_PORT";
+
     public static final String EXCEPTION_MESSAGE_FIELD = "message";
     public static final String ERROR_LINE_MESSAGE_FIELD = "error_line";
     public static final String STACK_TRACE_FIELD = "stack_trace";

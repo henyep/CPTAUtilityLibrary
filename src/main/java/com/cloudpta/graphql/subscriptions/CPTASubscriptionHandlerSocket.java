@@ -1,13 +1,22 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.subscriptions;
 
 import java.io.BufferedReader;
@@ -27,10 +36,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import com.cloudpta.utilites.exceptions.CPTAException;
 import com.cloudpta.utilites.logging.CPTALogger;
-import com.cloudpta.graphql.common.QPGraphQLAPIConstants;
-import com.cloudpta.graphql.common.QPQueryVariablesParser;
+import com.cloudpta.graphql.common.CPTAGraphQLAPIConstants;
+import com.cloudpta.graphql.common.CPTAGraphQLHandler;
+import com.cloudpta.graphql.common.CPTAGraphQLQueryType;
+import com.cloudpta.graphql.common.CPTAQueryVariablesParser;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WebSocketAdapter;
+import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest;
+import org.eclipse.jetty.websocket.server.JettyServerUpgradeResponse;
+import org.eclipse.jetty.websocket.server.JettyWebSocketCreator;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
 import ch.qos.logback.classic.Logger;
@@ -51,8 +65,34 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonReader;
 
-public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
+public abstract class CPTASubscriptionHandlerSocket extends WebSocketAdapter implements JettyWebSocketCreator
 {
+    protected abstract Object returnNewInstance();
+    // This should return any existing graph ql build or null if there is not one
+    protected abstract GraphQL getExistingGraphQL(GraphQLContext context) throws CPTAException;
+    protected abstract TypeDefinitionRegistry getExistingTypeDefinitionRegistry(GraphQLContext context) throws CPTAException;
+    protected abstract GraphQL getExistingSubscriptionBuild(TypeDefinitionRegistry typeRegistry, GraphQLContext context) throws CPTAException;
+
+    // These are the inputs to the various schemas
+    protected abstract InputStream getTypesSchemaStream(GraphQLContext context) throws CPTAException;
+    protected abstract InputStream getSubscriptionSchemaStream(GraphQLContext context) throws CPTAException;
+
+    // get handlers
+    protected abstract List<CPTAGraphQLHandler> getHandlers();
+
+    @Override
+    public Object createWebSocket(JettyServerUpgradeRequest req, JettyServerUpgradeResponse resp) 
+    {
+        // get the requested protocals in the req
+        List<String> requestedSubprotocols = req.getSubProtocols();
+        for(String currentSubprotocol : requestedSubprotocols)
+        {
+            resp.setAcceptedSubProtocol(currentSubprotocol);
+        }
+        
+        return returnNewInstance();
+    }
+    
     @Override
     public void onWebSocketConnect(Session session)
     {
@@ -83,38 +123,34 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
 
     protected void handleInitialiseSubscriptionRequest(JsonObject queryAsJson) throws IOException
     {
-        // Get id
-        String id = queryAsJson.getString(QPGraphQLAPIConstants.PAYLOAD_ID);
         // Get the payload
-        JsonObject requestParamsForThisSubscription = queryAsJson.getJsonObject(QPGraphQLAPIConstants.PAYLOAD); 
-        requestParamsForSubscriptions.put(id, requestParamsForThisSubscription);
+        requestParamsForSubscription = queryAsJson.getJsonObject(CPTAGraphQLAPIConstants.PAYLOAD); 
         // send ack back
-        socketSession.getRemote().sendString(QPGraphQLAPIConstants.CONNECTION_INIT_RESPONSE);
+        socketSession.getRemote().sendString(CPTAGraphQLAPIConstants.CONNECTION_INIT_RESPONSE);
     }
 
     protected void handleStartSubscriptionRequest(JsonObject queryAsJson) throws CPTAException, IOException
     {
         // Get id
-        String id = queryAsJson.getString(QPGraphQLAPIConstants.PAYLOAD_ID);
+        String id = queryAsJson.getString(CPTAGraphQLAPIConstants.PAYLOAD_ID);
         // handle query
-        queryAsJson = queryAsJson.getJsonObject(QPGraphQLAPIConstants.PAYLOAD);  
+        queryAsJson = queryAsJson.getJsonObject(CPTAGraphQLAPIConstants.PAYLOAD);  
         // Get operation name
         String operationName = null;
-        if(false == queryAsJson.isNull(QPGraphQLAPIConstants.OPERATION_NAME))
+        if(false == queryAsJson.isNull(CPTAGraphQLAPIConstants.OPERATION_NAME))
         {
-            operationName = queryAsJson.getString(QPGraphQLAPIConstants.OPERATION_NAME);
+            operationName = queryAsJson.getString(CPTAGraphQLAPIConstants.OPERATION_NAME);
         }
         // get the query field
-        String graphQLQuery = queryAsJson.getString(QPGraphQLAPIConstants.OPERATION_TEXT);
+        String graphQLQuery = queryAsJson.getString(CPTAGraphQLAPIConstants.OPERATION_TEXT);
         // Need to turn variables into a map of keys and values
-        JsonObject variablesAsJsonObject = queryAsJson.getJsonObject(QPGraphQLAPIConstants.OPERATION_VARIABLES);
-        Map<String, Object> variables = QPQueryVariablesParser.parseVariables(variablesAsJsonObject);
+        JsonObject variablesAsJsonObject = queryAsJson.getJsonObject(CPTAGraphQLAPIConstants.OPERATION_VARIABLES);
+        Map<String, Object> variables = CPTAQueryVariablesParser.parseVariables(variablesAsJsonObject);
 
         // Build the context for the query
         GraphQLContext contextForQuery = GraphQLContext.newContext().build();
         // Get the request params
-        JsonObject requestParams = this.requestParamsForSubscriptions.get(id);
-        Map<String, String> socketRequestDetails = convertRequestToMap(requestParams, socketSession);
+        Map<String, String> socketRequestDetails = convertRequestToMap(requestParamsForSubscription, socketSession);
         initialiseContext(contextForQuery, socketRequestDetails, graphQLQuery, operationName, variablesAsJsonObject);
 
         // Set up all the graphql if need to
@@ -139,15 +175,15 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
         {
             JsonObjectBuilder response = Json.createObjectBuilder();
             // Add type
-            response.add(QPGraphQLAPIConstants.PAYLOAD_TYPE, QPGraphQLAPIConstants.PAYLOAD_TYPE_DATA);
+            response.add(CPTAGraphQLAPIConstants.PAYLOAD_TYPE, CPTAGraphQLAPIConstants.PAYLOAD_TYPE_DATA);
             // Add id
-            response.add(QPGraphQLAPIConstants.PAYLOAD_ID, id);
+            response.add(CPTAGraphQLAPIConstants.PAYLOAD_ID, id);
 
             // Add payload
             // This is the execution result as json
             Map<String, Object> resultAsJson = executionResult.toSpecification();
             JsonObjectBuilder payloadAsJson = Json.createObjectBuilder(resultAsJson);
-            response.add(QPGraphQLAPIConstants.PAYLOAD, payloadAsJson);
+            response.add(CPTAGraphQLAPIConstants.PAYLOAD, payloadAsJson);
 
             // Convert that result into a json string
             String resultAsString = response.build().toString();
@@ -158,7 +194,7 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
         {
             // Create a subscription
             AtomicReference<Subscription> subscriptionRef = new AtomicReference<>();
-            QPSubscriptionFeed resultStreamSubscriber = new QPSubscriptionFeed(socketSession, subscriptionRef, id);
+            CPTASubscriptionFeed resultStreamSubscriber = new CPTASubscriptionFeed(socketSession, subscriptionRef, id);
 
             // Subscribe to this stream
             responseStream.subscribe(resultStreamSubscriber);
@@ -171,13 +207,10 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
     protected void handleStopSubscriptionRequest(JsonObject queryAsJson)
     {
         // Get id
-        String id = queryAsJson.getString(QPGraphQLAPIConstants.PAYLOAD_ID);
+        String id = queryAsJson.getString(CPTAGraphQLAPIConstants.PAYLOAD_ID);
         // Stop the subscription
         subscription.stop();
-        subscription = null;
-
-        // remove request params
-        requestParamsForSubscriptions.remove(id);        
+        subscription = null;      
     }
 
     protected void handleIncomingMessage(String queryAsString) 
@@ -187,19 +220,19 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
             // Parse the query
             JsonReader reader = Json.createReader(new StringReader(queryAsString));
             JsonObject queryObject = reader.readObject(); 
-            String type = queryObject.getString(QPGraphQLAPIConstants.PAYLOAD_TYPE);  
+            String type = queryObject.getString(CPTAGraphQLAPIConstants.PAYLOAD_TYPE);  
             // If we are an init
-            if( 0 == type.compareTo(QPGraphQLAPIConstants.PAYLOAD_TYPE_CONNECTION_INIT))
+            if( 0 == type.compareTo(CPTAGraphQLAPIConstants.PAYLOAD_TYPE_CONNECTION_INIT))
             {
                 handleInitialiseSubscriptionRequest(queryObject);
             }
             // If we are a start
-            else if(0 == type.compareTo(QPGraphQLAPIConstants.PAYLOAD_TYPE_START))
+            else if(0 == type.compareTo(CPTAGraphQLAPIConstants.PAYLOAD_TYPE_START))
             {
                 handleStartSubscriptionRequest(queryObject);
             }
             // If we are a stop
-            else if(0 == type.compareTo(QPGraphQLAPIConstants.PAYLOAD_TYPE_STOP))
+            else if(0 == type.compareTo(CPTAGraphQLAPIConstants.PAYLOAD_TYPE_STOP))
             {
                 handleStopSubscriptionRequest(queryObject);
             }            
@@ -237,7 +270,7 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
 
         // Add remote host
         String remoteHost = socketSession.getRemoteAddress().toString();
-        socketRequestDetails.put(QPGraphQLAPIConstants.CONTEXT_REMOTE_HOST, remoteHost);
+        socketRequestDetails.put(CPTAGraphQLAPIConstants.CONTEXT_REMOTE_HOST, remoteHost);
 
         // Add all the fields
         Iterator<String> headerNames = httpRequest.keySet().iterator();
@@ -245,7 +278,7 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
         {
             String currentHeaderName = headerNames.next();
             String currentHeaderValue = httpRequest.getString(currentHeaderName);
-            socketRequestDetails.put(currentHeaderName, currentHeaderValue);
+            socketRequestDetails.put(currentHeaderName.toLowerCase(), currentHeaderValue);
         }
 
         // Add all the cookies
@@ -264,10 +297,10 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
         // Default just saves the operation name, operation as string, request and variables
         if(null != operationName)
         {
-            contextToInitialise.put(QPGraphQLAPIConstants.CONTEXT_OPERATION_NAME, operationName);
+            contextToInitialise.put(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_NAME, operationName);
         }
-        contextToInitialise.put(QPGraphQLAPIConstants.CONTEXT_OPERATION_REQUEST, operationAsString);
-        contextToInitialise.put(QPGraphQLAPIConstants.CONTEXT_OPERATION_VARIABLES, variablesAsJsonObject);
+        contextToInitialise.put(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_REQUEST, operationAsString);
+        contextToInitialise.put(CPTAGraphQLAPIConstants.CONTEXT_OPERATION_VARIABLES, variablesAsJsonObject);
 
         // Add all the socket request details
         Set<String> socketRequestPropertyNames = socketRequestDetails.keySet();
@@ -314,20 +347,26 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
                 String apiTypesSchema = schemaStream.lines().collect(Collectors.joining("\n"));
                 // Then with subscriptions schema
                 schemaStream = new BufferedReader(new InputStreamReader(subscriptionsSchemaStream, StandardCharsets.UTF_8));
-                String subscriptionsSchema = schemaStream.lines().collect(Collectors.joining("\n"));
+                String subscriptionsSchema = " type Subscription { " + schemaStream.lines().collect(Collectors.joining("\n")) + " } ";
+                // Need dummy query type
+                String dummyQuerySchema = "type Query{ \n" +
+                    "dummyQuery:String \n" +
+                "}";
                 // Finally schema to bring it all together
-                String holderSchema = QPGraphQLAPIConstants.SUBSCRIPTION_HOLDER_SCHEMA;
+                String holderSchema = CPTAGraphQLAPIConstants.SUBSCRIPTION_HOLDER_SCHEMA;
 
                 // Parse these schemas
                 SchemaParser schemaParser = new SchemaParser();
                 TypeDefinitionRegistry apiTypeDefinitionRegistry = schemaParser.parse(apiTypesSchema);
                 TypeDefinitionRegistry subscriptionTypeDefinitionRegistry = schemaParser.parse(subscriptionsSchema);
+                TypeDefinitionRegistry dummyQueryDefinitionRegistry = schemaParser.parse(dummyQuerySchema);
                 TypeDefinitionRegistry schemaTypeDefinitionRegistry = schemaParser.parse(holderSchema);
 
                 // Merge them
                 mergedTypeDefinitionRegistry = new TypeDefinitionRegistry();
                 mergedTypeDefinitionRegistry.merge(apiTypeDefinitionRegistry);
                 mergedTypeDefinitionRegistry.merge(subscriptionTypeDefinitionRegistry);
+                mergedTypeDefinitionRegistry.merge(dummyQueryDefinitionRegistry);              
                 mergedTypeDefinitionRegistry.merge(schemaTypeDefinitionRegistry);              
         }
 
@@ -350,7 +389,7 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
                 RuntimeWiring.newRuntimeWiring()
                 .type
                 (
-                    TypeRuntimeWiring.newTypeWiring(QPGraphQLAPIConstants.WIRING_SUBSCRIPTION_TYPE)
+                    TypeRuntimeWiring.newTypeWiring(CPTAGraphQLAPIConstants.WIRING_SUBSCRIPTION_TYPE)
                     .dataFetchers(fetcherForThisBuild)
                 );
                 // Add type resolvers
@@ -372,28 +411,16 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
         
         return subscriptionBuild;
     }
-
-    // This should return any existing graph ql build or null if there is not one
-    protected abstract GraphQL getExistingGraphQL(GraphQLContext context) throws CPTAException;
-    protected abstract TypeDefinitionRegistry getExistingTypeDefinitionRegistry(GraphQLContext context) throws CPTAException;
-    protected abstract GraphQL getExistingSubscriptionBuild(TypeDefinitionRegistry typeRegistry, GraphQLContext context) throws CPTAException;
-
-    // These are the inputs to the various schemas
-    protected abstract InputStream getTypesSchemaStream(GraphQLContext context) throws CPTAException;
-    protected abstract InputStream getSubscriptionSchemaStream(GraphQLContext context) throws CPTAException;
-
-    // get handlers
-    protected abstract List<QPSubscriptionHandler> getHandlers();
     
     protected void addTypeResolversForSubscription(graphql.schema.idl.RuntimeWiring.Builder subscriptionRuntimeWiringBuilder, GraphQLContext context) throws CPTAException
     {
         // get the handlers
-        List<QPSubscriptionHandler> handlers = getHandlers();
+        List<CPTAGraphQLHandler> handlers = getHandlers();
 
         // for each handler add type resolvers
-        for(QPSubscriptionHandler currentHandler : handlers)
+        for(CPTAGraphQLHandler currentHandler : handlers)
         {
-            currentHandler.addTypeResolversForSubscriptions(subscriptionRuntimeWiringBuilder, context);
+            currentHandler.addTypeResolversForQueryType(CPTAGraphQLQueryType.SUBSCRIPTION, subscriptionRuntimeWiringBuilder, context);
         }
     }
 
@@ -402,20 +429,21 @@ public abstract class QPSubscriptionHandlerSocket extends WebSocketAdapter
         Map<String, DataFetcher> allDataFetchers = new ConcurrentHashMap<>();
 
         // Get all the handlers
-        List<QPSubscriptionHandler> handlers = getHandlers();
+        List<CPTAGraphQLHandler> handlers = getHandlers();
         
         // for each handler add data handlers
-        for(QPSubscriptionHandler currentHandler: handlers)
+        for(CPTAGraphQLHandler currentHandler: handlers)
         {
-            currentHandler.getSubcriptionsDataFetchers(context);
+            Map<String, DataFetcher> dataFetchersForHandler = currentHandler.getDataFetchersForQueryType(CPTAGraphQLQueryType.SUBSCRIPTION, context);
+            allDataFetchers.putAll(dataFetchersForHandler);
         }
 
         return allDataFetchers;
     }
 
-    protected QPSubscriptionFeed subscription = null;
+    protected CPTASubscriptionFeed subscription = null;
     //protected Map<String, QPSubscriptionFeed> subscriptions = new ConcurrentHashMap<>();
-    protected Map<String, JsonObject> requestParamsForSubscriptions = new HashMap<>();
-    Logger socketLogger = CPTALogger.getLogger();    
+    protected JsonObject requestParamsForSubscription = null;
+    protected Logger socketLogger = CPTALogger.getLogger();    
     protected Session socketSession;    
 }

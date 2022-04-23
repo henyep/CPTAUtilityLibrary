@@ -17,30 +17,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 */
-package com.cloudpta.utilites.websocket;
+package com.cloudpta.embedded_jetty;
 
-/**
- *
- * @author Danny
- */
-class CPTAWebSocketHeader
+public class CPTAAPIServerCloseHandler extends Thread
 {
-    public CPTAWebSocketHeader(String newName, String newValue)
+    public CPTAAPIServerCloseHandler(CPTAAPIServer newServer)
     {
-        name = newName;
-        value = newValue;
+        server = newServer;
     }
     
-    public String getValue()
+    public void run()
     {
-        return value;
+        try
+        {
+            server.shutdown();
+        }
+        catch(Exception E)
+        {
+            E.printStackTrace();
+        }
     }
     
-    public String getName()
-    {
-        return name;
-    }
-    
-    protected String name;
-    protected String value;    
+    CPTAAPIServer server;    
 }

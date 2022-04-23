@@ -1,16 +1,25 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.common;
 
-public interface QPGraphQLAPIConstants 
+public interface CPTAGraphQLAPIConstants 
 {
     // fields for subscription requests
     public final static String PAYLOAD_ID = "id";    
@@ -46,8 +55,8 @@ public interface QPGraphQLAPIConstants
     public final static String WIRING_MUTATION_TYPE = "Mutation";    
     public final static String WIRING_QUERY_TYPE = "Query";    
     public final static String WIRING_SUBSCRIPTION_TYPE = "Subscription";    
-    public final static String MUTATION_QUERY_HOLDER_SCHEMA = "schema {\n" + "query:Query \n" + "mutation:Mutation \n" + "subscription:Subscription \n" + "}";   
-    public final static String SUBSCRIPTION_HOLDER_SCHEMA = "schema {\n" + "subscription:Subscription \n" + "}";  
+    public final static String SUBSCRIPTION_HOLDER_SCHEMA = "schema {\n" + "query:Query\n" + "subscription:Subscription \n" + "}";  
+    public final static String SUBSCRIPTION_DUMMY_QUERY_SCHEMA = "type Query{ \n" + "dummyQuery:String \n" + "}";  
     
     // Get the names of standard qp fields in context
     public final static String SUBSCRIPTION_TIMEOUT = "QP_SUBSCRIPTION_TIMEOUT";

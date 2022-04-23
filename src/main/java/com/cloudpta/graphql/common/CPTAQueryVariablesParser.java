@@ -1,13 +1,22 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//                                 NOTICE:
-//  THIS PROGRAM CONSISTS OF TRADE SECRECTS THAT ARE THE PROPERTY OF
-//  Advanced Products Ltd. THE CONTENTS MAY NOT BE USED OR DISCLOSED
-//  WITHOUT THE EXPRESS WRITTEN PERMISSION OF THE OWNER.
-//
-//               COPYRIGHT Advanced Products Ltd 2016-2019
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+
+Copyright 2017-2019 Advanced Products Limited, 
+Copyright 2021-2022 Liquid Markets Limited, 
+github.com/dannyb2018
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*/
 package com.cloudpta.graphql.common;
 
 import java.util.ArrayList;
@@ -20,7 +29,7 @@ import jakarta.json.JsonNumber;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 
-public class QPQueryVariablesParser 
+public class CPTAQueryVariablesParser 
 {
     public static Map<String, Object> parseVariables(JsonObject variables)
     {
@@ -55,7 +64,7 @@ public class QPQueryVariablesParser
                 }
                 else if(JsonValue.ValueType.NULL == valueForKey.getValueType())
                 {
-                    value = JsonValue.NULL;
+                    value = null;
                 }
                 else if(JsonValue.ValueType.NUMBER == valueForKey.getValueType())
                 {
@@ -111,7 +120,7 @@ public class QPQueryVariablesParser
             }
             else if(JsonValue.ValueType.NULL == valueAtThisOffset.getValueType())
             {
-                value = JsonValue.NULL;
+                value = null;
             }
             else if(JsonValue.ValueType.STRING == valueAtThisOffset.getValueType())
             {
